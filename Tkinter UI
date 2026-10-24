@@ -1,0 +1,324 @@
+"""
+Smart Parking System - Thanh vien 2: UI / Frontend
+Giao dien Tkinter: dang nhap, man hinh chinh, so do 60 o tren 3 tang,
+tim xe, xem thong tin o do va popup kiosk thanh toan.
+
+"""
+import tkinter as tk
+from tkinter import ttk, messagebox
+
+APP_BG = "#eef2f5"
+GREEN = "#2e8b57"
+RED = "#d9534f"
+BLUE = "#2878b5"
+GRAY = "#7f8c8d"
+
+
+class LoginWindow:
+    """Man hinh dang nhap. Ban demo chap nhan tai khoan admin / 123456."""
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Smart Parking - Đăng nhập")
+        self.root.geometry("420x330")
+        self.root.configure(bg=APP_BG)
+        self.root.resizable(False, False)
+        self.root.attributes("-topmost", True)
+
+        panel = tk.Frame(root, bg="white", padx=28, pady=24)
+        panel.pack(fill="both", expand=True, padx=24, pady=24)
+
+        tk.Label(panel, text="SMART PARKING", font=("Arial", 18, "bold"),
+                 fg=GREEN, bg="white").pack(pady=(4, 8))
+        tk.Label(panel, text="Hệ thống quản lý bãi đỗ xe", font=("Arial", 10),
+                 bg="white", fg="#555").pack(pady=(0, 18))
+
+        tk.Label(panel, text="Tên đăng nhập", bg="white", anchor="w").pack(fill="x")
+        self.username = ttk.Entry(panel)
+        self.username.pack(fill="x", pady=(4, 12))
+        self.username.insert(0, "admin")
+
+        tk.Label(panel, text="Mật khẩu", bg="white", anchor="w").pack(fill="x")
+        self.password = ttk.Entry(panel, show="*")
+        self.password.pack(fill="x", pady=(4, 14))
+        self.password.insert(0, "123456")
+        self.password.bind("<Return>", lambda _event: self.login())
+
+        ttk.Button(panel, text="ĐĂNG NHẬP", command=self.login).pack(fill="x", ipady=5)
+        tk.Button(panel, text="Quên mật khẩu?", bg="white", fg=BLUE, relief="flat",
+                  command=self.forgot_password).pack(pady=(8, 0))
+
+    def login(self):
+        # Demo giao dien: khi tich hop, doi sang SecurityManager cua thanh vien 1.
+        if self.username.get().strip() == "admin" and self.password.get() == "123456":
+            self.root.attributes("-topmost", False)
+            for widget in self.root.winfo_children():
+                widget.destroy()
+            ParkingUI(self.root)
+        else:
+            messagebox.showerror("Đăng nhập thất bại",
+                                 "Thông tin đăng nhập chưa đúng.\nTài khoản demo: admin / 123456")
+
+    def forgot_password(self):
+        messagebox.showinfo("Quên mật khẩu",
+                            "Yêu cầu đặt lại mật khẩu đã được ghi nhận.\n"
+                            "Vui lòng liên hệ Quản trị viên để được hỗ trợ.")
+
+
+class ParkingUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Smart Parking System - Bảng điều khiển")
+        self.root.geometry("1120x760")
+        self.root.minsize(900, 650)
+        self.root.configure(bg=APP_BG)
+
+        self.floor_var = tk.StringVar(value="A")
+        self.shift_var = tk.StringVar(value="Ca sáng")
+        self.search_var = tk.StringVar()
+        self.slot_data = self.make_demo_data()
+        self.slot_buttons = {}
+
+        self.build_header()
+        self.build_toolbar()
+        self.build_legend()
+        self.build_main_area()
+        self.build_footer()
+        self.render_slots()
+
+    @staticmethod
+    def make_demo_data():
+        """Du lieu mau de minh hoa giao dien; khong phai du lieu that."""
+        data = {}
+        for floor in ("A", "B", "C"):
+            for number in range(1, 21):
+                slot_id = f"{floor}{number:02d}"
+                data[slot_id] = {
+                    "floor": floor,
+                    "number": number,
+                    "status": "occupied" if number in (3, 8, 14) and floor == "A" else "empty",
+                    "vehicle_type": "Xe máy" if number == 3 and floor == "A" else "Ô tô",
+                    "plate": "51A-123.45" if number == 3 and floor == "A" else "",
+                    "ticket": "TK-00003" if number == 3 and floor == "A" else "",
+                    "entry_time": "08:15" if number == 3 and floor == "A" else "",
+                    "compact": number in (1, 2, 3, 4),
+                }
+        return data
+
+    def build_header(self):
+        header = tk.Frame(self.root, bg=GREEN, padx=20, pady=15)
+        header.pack(fill="x")
+        tk.Label(header, text="SMART PARKING", bg=GREEN, fg="white",
+                 font=("Arial", 19, "bold")).pack(side="left")
+        tk.Label(header, text="Hệ thống quản lý bãi đỗ xe thông minh",
+                 bg=GREEN, fg="white", font=("Arial", 10)).pack(side="right", pady=6)
+
+    def build_toolbar(self):
+        toolbar = tk.Frame(self.root, bg="white", padx=16, pady=12)
+        toolbar.pack(fill="x", padx=16, pady=(14, 8))
+
+        tk.Label(toolbar, text="Tầng:", bg="white", font=("Arial", 10, "bold")).pack(side="left")
+        for floor in ("A", "B", "C"):
+            ttk.Radiobutton(toolbar, text=f"Tầng {floor}", value=floor,
+                            variable=self.floor_var, command=self.render_slots).pack(side="left", padx=5)
+
+        tk.Label(toolbar, text="Ca trực:", bg="white").pack(side="left", padx=(24, 5))
+        shift = ttk.Combobox(toolbar, textvariable=self.shift_var,
+                             values=("Ca sáng", "Ca chiều", "Ca tối"), width=12, state="readonly")
+        shift.pack(side="left")
+        shift.bind("<<ComboboxSelected>>", lambda _e: self.update_status())
+
+        tk.Label(toolbar, text="Tìm biển số / mã vé:", bg="white").pack(side="left", padx=(22, 5))
+        search = ttk.Entry(toolbar, textvariable=self.search_var, width=22)
+        search.pack(side="left")
+        search.bind("<Return>", lambda _e: self.search_vehicle())
+        ttk.Button(toolbar, text="Tìm xe", command=self.search_vehicle).pack(side="left", padx=6)
+        ttk.Button(toolbar, text="Xóa tìm", command=self.clear_search).pack(side="left")
+
+    def build_legend(self):
+        legend = tk.Frame(self.root, bg=APP_BG, padx=20, pady=4)
+        legend.pack(fill="x")
+        items = [(GREEN, "Ô trống"), (RED, "Đang có xe"), (BLUE, "Ô Compact dành cho xe nhỏ")]
+        for color, label in items:
+            swatch = tk.Label(legend, bg=color, width=2, height=1)
+            swatch.pack(side="left", padx=(0, 5))
+            tk.Label(legend, text=label, bg=APP_BG, fg="#333").pack(side="left", padx=(0, 18))
+
+    def build_main_area(self):
+        body = tk.Frame(self.root, bg=APP_BG, padx=16, pady=8)
+        body.pack(fill="both", expand=True)
+
+        self.map_frame = tk.LabelFrame(body, text="Sơ đồ bãi đỗ xe 2D",
+                                       bg="white", padx=12, pady=12,
+                                       font=("Arial", 11, "bold"))
+        self.map_frame.pack(side="left", fill="both", expand=True)
+
+        self.canvas = tk.Canvas(self.map_frame, bg="white", highlightthickness=0)
+        self.canvas.pack(fill="both", expand=True)
+        self.canvas.bind("<Configure>", lambda _e: self.render_slots())
+
+        side = tk.LabelFrame(body, text="Thao tác nhanh", bg="white",
+                             padx=14, pady=14, font=("Arial", 11, "bold"), width=220)
+        side.pack(side="right", fill="y", padx=(12, 0))
+        side.pack_propagate(False)
+
+        ttk.Button(side, text="Mở Kiosk thanh toán",
+                   command=self.open_kiosk).pack(fill="x", pady=(4, 10), ipady=5)
+        ttk.Button(side, text="Làm mới sơ đồ",
+                   command=self.render_slots).pack(fill="x", pady=5)
+        ttk.Separator(side).pack(fill="x", pady=14)
+        tk.Label(side, text="Thông tin", bg="white", font=("Arial", 10, "bold")).pack(anchor="w")
+        self.info_label = tk.Label(side, text="Chọn một ô đỗ để xem chi tiết.",
+                                   bg="white", justify="left", wraplength=180, anchor="nw")
+        self.info_label.pack(fill="x", pady=8, anchor="w")
+
+    def build_footer(self):
+        footer = tk.Frame(self.root, bg="#dfe6e9", padx=16, pady=8)
+        footer.pack(fill="x")
+        self.status_label = tk.Label(footer, text="Sẵn sàng", bg="#dfe6e9", fg="#333")
+        self.status_label.pack(side="left")
+        tk.Label(footer, text="Thành viên 2 - UI / Frontend", bg="#dfe6e9",
+                 fg="#555").pack(side="right")
+
+    def render_slots(self):
+        if not hasattr(self, "canvas"):
+            return
+        self.canvas.delete("all")
+        self.slot_buttons.clear()
+        floor = self.floor_var.get()
+        width = max(self.canvas.winfo_width(), 500)
+        height = max(self.canvas.winfo_height(), 400)
+        self.canvas.create_text(width / 2, 18, text=f"TẦNG {floor}",
+                               font=("Arial", 13, "bold"), fill="#333")
+
+        cols = 5
+        margin_x, margin_y = 25, 45
+        gap_x, gap_y = 12, 15
+        cell_w = max(55, (width - 2 * margin_x - (cols - 1) * gap_x) / cols)
+        cell_h = max(52, (height - 2 * margin_y - 3 * gap_y) / 4)
+
+        for index in range(20):
+            number = index + 1
+            slot_id = f"{floor}{number:02d}"
+            info = self.slot_data[slot_id]
+            row, col = divmod(index, cols)
+            x1 = margin_x + col * (cell_w + gap_x)
+            y1 = margin_y + row * (cell_h + gap_y)
+            x2, y2 = x1 + cell_w, y1 + cell_h
+            if info["status"] == "occupied":
+                color = RED
+            elif info["compact"]:
+                color = BLUE
+            else:
+                color = GREEN
+            rect = self.canvas.create_rectangle(x1, y1, x2, y2, fill=color,
+                                                outline="white", width=2,
+                                                tags=(f"slot_{slot_id}", "slot"))
+            text = self.canvas.create_text((x1+x2)/2, (y1+y2)/2,
+                                           text=f"{slot_id}\n{'Có xe' if info['status']=='occupied' else 'Trống'}",
+                                           fill="white", font=("Arial", 9, "bold"),
+                                           tags=(f"slot_{slot_id}", "slot"))
+            self.canvas.tag_bind(f"slot_{slot_id}", "<Button-1>",
+                                 lambda event, sid=slot_id: self.handle_slot_click(sid))
+            self.slot_buttons[slot_id] = (rect, text)
+
+        self.update_status()
+
+    def handle_slot_click(self, slot_id):
+        info = self.slot_data[slot_id]
+        if info["status"] == "occupied":
+            text = (f"Mã ô: {slot_id}\nTrạng thái: Đang có xe\n"
+                    f"Loại xe: {info['vehicle_type']}\nBiển số: {info['plate'] or 'Chưa có'}\n"
+                    f"Mã vé: {info['ticket'] or 'Chưa có'}\nGiờ vào: {info['entry_time'] or 'Chưa có'}")
+        else:
+            text = f"Mã ô: {slot_id}\nTrạng thái: Còn trống\nLoại ô: {'Compact' if info['compact'] else 'Tiêu chuẩn'}"
+        self.info_label.config(text=text)
+        self.status_label.config(text=f"Đã chọn ô {slot_id}")
+
+    def search_vehicle(self):
+        query = self.search_var.get().strip().lower()
+        if not query:
+            messagebox.showinfo("Tìm xe", "Vui lòng nhập biển số hoặc mã vé cần tìm.")
+            return
+        for slot_id, info in self.slot_data.items():
+            if info["status"] == "occupied" and (
+                query in info["plate"].lower() or query in info["ticket"].lower()
+            ):
+                self.floor_var.set(info["floor"])
+                self.render_slots()
+                self.handle_slot_click(slot_id)
+                self.status_label.config(text=f"Tìm thấy xe tại ô {slot_id}")
+                return
+        messagebox.showwarning("Không tìm thấy", "Không tìm thấy xe theo thông tin đã nhập.")
+
+    def clear_search(self):
+        self.search_var.set("")
+        self.render_slots()
+        self.status_label.config(text="Đã xóa nội dung tìm kiếm")
+
+    def update_status(self):
+        floor = self.floor_var.get()
+        all_slots = [v for v in self.slot_data.values() if v["floor"] == floor]
+        occupied = sum(v["status"] == "occupied" for v in all_slots)
+        self.status_label.config(text=f"Tầng {floor}: {occupied}/20 ô đang có xe | {self.shift_var.get()}")
+
+    def open_kiosk(self):
+        win = tk.Toplevel(self.root)
+        win.title("Kiosk thanh toán")
+        win.geometry("390x430")
+        win.resizable(False, False)
+        win.transient(self.root)
+        win.grab_set()
+
+        frame = tk.Frame(win, padx=22, pady=20)
+        frame.pack(fill="both", expand=True)
+        tk.Label(frame, text="KIOSK THANH TOÁN", font=("Arial", 15, "bold"),
+                 fg=GREEN).pack(pady=(0, 18))
+
+        tk.Label(frame, text="Mã vé", anchor="w").pack(fill="x")
+        ticket_entry = ttk.Entry(frame)
+        ticket_entry.pack(fill="x", pady=(4, 10))
+        tk.Label(frame, text="Biển số xe", anchor="w").pack(fill="x")
+        plate_entry = ttk.Entry(frame)
+        plate_entry.pack(fill="x", pady=(4, 10))
+        tk.Label(frame, text="Loại xe", anchor="w").pack(fill="x")
+        type_box = ttk.Combobox(frame, values=("Xe máy", "Ô tô nhỏ", "Ô tô lớn"),
+                                state="readonly")
+        type_box.current(0)
+        type_box.pack(fill="x", pady=(4, 10))
+        tk.Label(frame, text="Số tiền cần thanh toán (VNĐ)", anchor="w").pack(fill="x")
+        fee_entry = ttk.Entry(frame)
+        fee_entry.insert(0, "0")
+        fee_entry.pack(fill="x", pady=(4, 14))
+
+        def confirm_payment():
+            if not ticket_entry.get().strip() or not plate_entry.get().strip():
+                messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập mã vé và biển số xe.", parent=win)
+                return
+            try:
+                fee = int(fee_entry.get().replace(",", "").strip())
+                if fee < 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Số tiền không hợp lệ", "Số tiền phải là số nguyên không âm.", parent=win)
+                return
+            messagebox.showinfo(
+                "Thông tin thanh toán",
+                f"Mã vé: {ticket_entry.get().strip()}\nBiển số: {plate_entry.get().strip()}\n"
+                f"Loại xe: {type_box.get()}\nSố tiền: {fee:,} VNĐ\n\n"
+                "Đây là giao diện demo; chưa kết nối xử lý thanh toán thật.",
+                parent=win
+            )
+
+        ttk.Button(frame, text="XÁC NHẬN THANH TOÁN",
+                   command=confirm_payment).pack(fill="x", ipady=6)
+        ttk.Button(frame, text="Đóng", command=win.destroy).pack(fill="x", pady=(8, 0))
+
+
+def main():
+    root = tk.Tk()
+    LoginWindow(root)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
